@@ -1,149 +1,174 @@
-import  { useEffect, useRef, useState } from "react";
-import { AnimatePresence } from "framer-motion";
-import { pickUniqueColor } from "./utils/colors";
-import Background from "./components/Background";
-import FingerCircle from "./components/FingerCircle";
+import React, { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import "./index.css";
 
 type Finger = {
-  id: number; // Touch.identifier
+  id: number;
   x: number;
   y: number;
   color: string;
 };
 
-type FingerMap = Map<number, Finger>;
+const getRandomColor = () =>
+  `hsl(${Math.floor(Math.random() * 360)}, 70%, 60%)`;
+
+const noFingerQuotes = [
+  "Waiting for brave souls… 🖐️",
+  "Tap the screen, daredevils! 🎯",
+  "No fingers, no fun. Try again! 🎲",
+  "Lonely screen… someone join the game 🤷",
+];
+
+// These are the fun “scenario questions”
+const questionQuotes = [
+  "Who will pay the bill? 💸",
+  "Who is not lucky today? 🍀",
+  "Who’s the chosen one? 👑",
+  "Who’s making coffee? ☕",
+  "Who’s buying the next round? 🍻",
+  "Who has to sing karaoke? 🎤",
+  "Who gets blamed for everything? 😅",
+];
+
+const chosenQuotes = [
+  "You’ve been chosen! 👑",
+  "Finger of destiny! ✨",
+  "All hail the unlucky winner! 🙌",
+  "Fate points at you! 👉",
+];
 
 export default function App() {
-  const [fingers, setFingers] = useState<FingerMap>(new Map());
+  const [fingers, setFingers] = useState<Finger[]>([]);
   const [chosenId, setChosenId] = useState<number | null>(null);
   const [bgColor, setBgColor] = useState<string>("#111");
+  const [quote, setQuote] = useState<string>("");
+  const counterRef = useRef<number | null>(null);
 
-  const selectionTimer = useRef<number | null>(null);
+  useEffect(() => {
+    if (fingers.length === 0) {
+      setChosenId(null);
+      setBgColor("#111");
+      if (counterRef.current) clearTimeout(counterRef.current);
 
-  // helpers
-  const scheduleSelection = (delayMs = 2000) => {
-    if (selectionTimer.current) window.clearTimeout(selectionTimer.current);
-    if (fingers.size === 0) return;
-    selectionTimer.current = window.setTimeout(() => {
-      const ids = Array.from(fingers.keys());
-      if (ids.length === 0) return;
-      const picked = ids[Math.floor(Math.random() * ids.length)];
-      const pickedFinger = fingers.get(picked)!;
-      setChosenId(picked);
-      setBgColor(pickedFinger.color);
-    }, delayMs);
+      // Idle quote
+      setQuote(noFingerQuotes[Math.floor(Math.random() * noFingerQuotes.length)]);
+    } else {
+      if (counterRef.current) clearTimeout(counterRef.current);
+
+      // Show a random “scenario question”
+      setQuote(questionQuotes[Math.floor(Math.random() * questionQuotes.length)]);
+
+      counterRef.current = window.setTimeout(() => {
+        if (fingers.length > 0) {
+          const randomFinger =
+            fingers[Math.floor(Math.random() * fingers.length)];
+          setChosenId(randomFinger.id);
+          setBgColor(randomFinger.color);
+
+          // Show chosen response
+          setQuote(chosenQuotes[Math.floor(Math.random() * chosenQuotes.length)]);
+        }
+      }, 3000);
+    }
+  }, [fingers]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const newFingers: Finger[] = [];
+    for (let i = 0; i < e.touches.length; i++) {
+      const touch = e.touches[i];
+      newFingers.push({
+        id: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+        color:
+          fingers.find((f) => f.id === touch.identifier)?.color ||
+          getRandomColor(),
+      });
+    }
+    setFingers(newFingers);
   };
 
-  // Clean up timer on unmount
-  useEffect(() => () => { if (selectionTimer.current) window.clearTimeout(selectionTimer.current); }, []);
-
-  // Touch handlers
-  useEffect(() => {
-    const onStart = (e: TouchEvent) => {
-      e.preventDefault();
-      setChosenId(null); // reset choice when new round starts
-      setFingers(prev => {
-        const next = new Map(prev);
-        const used = new Set(Array.from(next.values()).map(f => f.color));
-        for (const t of Array.from(e.changedTouches)) {
-          if (!next.has(t.identifier)) {
-            next.set(t.identifier, {
-              id: t.identifier,
-              x: t.clientX,
-              y: t.clientY,
-              color: pickUniqueColor(used),
-            });
-          }
-        }
-        return next;
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const moved: Finger[] = [];
+    for (let i = 0; i < e.touches.length; i++) {
+      const touch = e.touches[i];
+      moved.push({
+        id: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+        color:
+          fingers.find((f) => f.id === touch.identifier)?.color ||
+          getRandomColor(),
       });
-    };
-
-    const onMove = (e: TouchEvent) => {
-      e.preventDefault();
-      setFingers(prev => {
-        const next = new Map(prev);
-        for (const t of Array.from(e.changedTouches)) {
-          const f = next.get(t.identifier);
-          if (f) {
-            f.x = t.clientX;
-            f.y = t.clientY;
-            next.set(t.identifier, f);
-          }
-        }
-        return next;
-      });
-    };
-
-    const onEnd = (e: TouchEvent) => {
-      e.preventDefault();
-      setFingers(prev => {
-        const next = new Map(prev);
-        for (const t of Array.from(e.changedTouches)) {
-          next.delete(t.identifier);
-        }
-        if (next.size === 0) {
-          setChosenId(null);
-          setBgColor("#111");
-          if (selectionTimer.current) window.clearTimeout(selectionTimer.current);
-        }
-        return next;
-      });
-    };
-
-    const opts: AddEventListenerOptions = { passive: false };
-    window.addEventListener("touchstart", onStart, opts);
-    window.addEventListener("touchmove", onMove, opts);
-    window.addEventListener("touchend", onEnd, opts);
-    window.addEventListener("touchcancel", onEnd, opts);
-
-    return () => {
-      window.removeEventListener("touchstart", onStart);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onEnd);
-      window.removeEventListener("touchcancel", onEnd);
-    };
-  }, []);
-
-  // When the finger set changes, (re)schedule selection unless one is already chosen
-  useEffect(() => {
-    if (fingers.size > 0 && chosenId === null) {
-      scheduleSelection(2000);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fingers, chosenId]);
+    setFingers(moved);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const remaining: Finger[] = [];
+    for (let i = 0; i < e.touches.length; i++) {
+      const touch = e.touches[i];
+      remaining.push({
+        id: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+        color:
+          fingers.find((f) => f.id === touch.identifier)?.color ||
+          getRandomColor(),
+      });
+    }
+    setFingers(remaining);
+  };
 
   return (
-    <div className="h-screen w-screen relative overflow-hidden touch-none select-none text-white">
-      <Background color={bgColor} />
-
-      {/* helper text */}
-      <div className="absolute inset-x-0 top-4 text-center text-sm/relaxed text-white/70 px-4">
-        <p>Place 2+ fingers anywhere. Drag around. After ~2s one finger is picked.</p>
-        <p>Lifting all fingers resets.</p>
-      </div>
-
-      {/* active fingers */}
+    <motion.div
+      className="w-full h-screen overflow-hidden relative flex items-center justify-center"
+      style={{ backgroundColor: bgColor }}
+      animate={{ backgroundColor: bgColor }}
+      transition={{ duration: 0.8 }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Quotes */}
       <AnimatePresence>
-        {Array.from(fingers.values()).map(f => (
-          <FingerCircle key={f.id} x={f.x} y={f.y} color={f.color} chosen={f.id === chosenId} />
-        ))}
+        {quote && (
+          <motion.div
+            key={quote}
+            className="absolute text-white text-2xl font-bold text-center px-4"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.6 }}
+          >
+            {quote}
+          </motion.div>
+        )}
       </AnimatePresence>
 
-      {/* Replay button after pick (optional) */}
-      {chosenId !== null && (
-        <button
-          className="absolute bottom-6 left-1/2 -translate-x-1/2 rounded-2xl px-5 py-2 bg-white/10 hover:bg-white/15 backdrop-blur border border-white/15 shadow-lg"
-          onClick={() => {
-            setChosenId(null);
-            setBgColor("#111");
-            // keep current fingers but reschedule a new random pick
-            scheduleSelection(1500);
-          }}
-        >
-          Replay
-        </button>
-      )}
-    </div>
+      {/* Fingers */}
+      <AnimatePresence>
+        {fingers.map((finger) => (
+          <motion.div
+            key={finger.id}
+            className="absolute w-16 h-16 rounded-full border-4"
+            style={{
+              left: finger.x - 32,
+              top: finger.y - 32,
+              borderColor: finger.color,
+              boxShadow: `0 0 15px ${finger.color}`,
+            }}
+            animate={
+              chosenId === finger.id
+                ? {
+                    scale: [1, 1.2, 1],
+                    transition: { repeat: Infinity, duration: 1.2 },
+                  }
+                : { scale: 1 }
+            }
+          />
+        ))}
+      </AnimatePresence>
+    </motion.div>
   );
 }
