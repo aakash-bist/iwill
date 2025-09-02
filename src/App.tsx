@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from "react";
+import  { useEffect, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
+import { pickUniqueColor } from "./utils/colors";
 import Background from "./components/Background";
 import FingerCircle from "./components/FingerCircle";
-import { pickUniqueColor } from "./utils/colors";
 
 type Finger = {
   id: number; // Touch.identifier
