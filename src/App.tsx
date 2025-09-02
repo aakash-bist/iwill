@@ -1,174 +1,213 @@
-import React, { useState, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import "./index.css";
+import React, { useEffect, useRef, useState, type JSX } from "react";
 
 type Finger = {
-  id: number;
-  x: number;
-  y: number;
-  color: string;
+  id: number; // pointerId
+  x: number; // clientX
+  y: number; // clientY
+  color: string; // assigned color
+  createdAt: number;
 };
 
-const getRandomColor = () =>
-  `hsl(${Math.floor(Math.random() * 360)}, 70%, 60%)`;
+const DEFAULT_BG = "#0b1020";
+const RING_SIZE = 84; // px diameter
+const SELECTION_DELAY = 2500; // ms (2.5s)
 
-const noFingerQuotes = [
-  "Waiting for brave souls… 🖐️",
-  "Tap the screen, daredevils! 🎯",
-  "No fingers, no fun. Try again! 🎲",
-  "Lonely screen… someone join the game 🤷",
-];
+function randomUniqueColor(existing: Set<string>) {
+  for (let tries = 0; tries < 30; tries++) {
+    const h = Math.floor(Math.random() * 360);
+    const s = 70 + Math.floor(Math.random() * 15);
+    const l = 45 + Math.floor(Math.random() * 8);
+    const c = `hsl(${h} ${s}% ${l}%)`;
+    if (!existing.has(c)) return c;
+  }
+  return `hsl(${Math.floor(Math.random() * 360)} 75% 50%)`;
+}
 
-// These are the fun “scenario questions”
-const questionQuotes = [
-  "Who will pay the bill? 💸",
-  "Who is not lucky today? 🍀",
-  "Who’s the chosen one? 👑",
-  "Who’s making coffee? ☕",
-  "Who’s buying the next round? 🍻",
-  "Who has to sing karaoke? 🎤",
-  "Who gets blamed for everything? 😅",
-];
-
-const chosenQuotes = [
-  "You’ve been chosen! 👑",
-  "Finger of destiny! ✨",
-  "All hail the unlucky winner! 🙌",
-  "Fate points at you! 👉",
-];
-
-export default function App() {
-  const [fingers, setFingers] = useState<Finger[]>([]);
+export default function FingerPickerGame(): JSX.Element {
+  const [fingers, setFingers] = useState<Map<number, Finger>>(new Map());
   const [chosenId, setChosenId] = useState<number | null>(null);
-  const [bgColor, setBgColor] = useState<string>("#111");
-  const [quote, setQuote] = useState<string>("");
-  const counterRef = useRef<number | null>(null);
+  const [bgColor, setBgColor] = useState<string>(DEFAULT_BG);
+  const timerRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  function resetSelectionTimer() {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setChosenId(null);
+
+    if (fingers.size === 0) {
+      setBgColor(DEFAULT_BG);
+      return;
+    }
+
+    timerRef.current = window.setTimeout(() => {
+      const keys = Array.from(fingers.keys());
+      if (keys.length === 0) return;
+      const sel = keys[Math.floor(Math.random() * keys.length)];
+      setChosenId(sel);
+      const f = fingers.get(sel);
+      if (f) setBgColor(f.color);
+      timerRef.current = null;
+    }, SELECTION_DELAY);
+  }
+
+  function upsertFinger(id: number, clientX: number, clientY: number) {
+    setFingers(prev => {
+      const next = new Map(prev);
+      const existing = new Set(Array.from(next.values()).map(f => f.color));
+      if (next.has(id)) {
+        const f = next.get(id)!;
+        next.set(id, { ...f, x: clientX, y: clientY });
+      } else {
+        const color = randomUniqueColor(existing);
+        next.set(id, { id, x: clientX, y: clientY, color, createdAt: Date.now() });
+      }
+      return next;
+    });
+  }
+
+  function removeFinger(id: number) {
+    setFingers(prev => {
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  }
 
   useEffect(() => {
-    if (fingers.length === 0) {
-      setChosenId(null);
-      setBgColor("#111");
-      if (counterRef.current) clearTimeout(counterRef.current);
+    const container = containerRef.current ?? document.body;
 
-      // Idle quote
-      setQuote(noFingerQuotes[Math.floor(Math.random() * noFingerQuotes.length)]);
-    } else {
-      if (counterRef.current) clearTimeout(counterRef.current);
-
-      // Show a random “scenario question”
-      setQuote(questionQuotes[Math.floor(Math.random() * questionQuotes.length)]);
-
-      counterRef.current = window.setTimeout(() => {
-        if (fingers.length > 0) {
-          const randomFinger =
-            fingers[Math.floor(Math.random() * fingers.length)];
-          setChosenId(randomFinger.id);
-          setBgColor(randomFinger.color);
-
-          // Show chosen response
-          setQuote(chosenQuotes[Math.floor(Math.random() * chosenQuotes.length)]);
-        }
-      }, 3000);
+    function onPointerDown(e: PointerEvent) {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      (e.target as Element).setPointerCapture?.(e.pointerId);
+      upsertFinger(e.pointerId, e.clientX, e.clientY);
     }
+
+    function onPointerMove(e: PointerEvent) {
+      if (!e.isPrimary && e.pointerType === "mouse") return;
+      if (fingers.has(e.pointerId)) {
+        upsertFinger(e.pointerId, e.clientX, e.clientY);
+      }
+    }
+
+    function onPointerUp(e: PointerEvent) {
+      try { (e.target as Element).releasePointerCapture?.(e.pointerId); } catch {}
+      removeFinger(e.pointerId);
+    }
+
+    container.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+
+    return () => {
+      container.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+    };
   }, [fingers]);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    const newFingers: Finger[] = [];
-    for (let i = 0; i < e.touches.length; i++) {
-      const touch = e.touches[i];
-      newFingers.push({
-        id: touch.identifier,
-        x: touch.clientX,
-        y: touch.clientY,
-        color:
-          fingers.find((f) => f.id === touch.identifier)?.color ||
-          getRandomColor(),
-      });
-    }
-    setFingers(newFingers);
-  };
+  useEffect(() => {
+    resetSelectionTimer();
+    return () => {
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [Array.from(fingers.keys()).toString()]);
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    const moved: Finger[] = [];
-    for (let i = 0; i < e.touches.length; i++) {
-      const touch = e.touches[i];
-      moved.push({
-        id: touch.identifier,
-        x: touch.clientX,
-        y: touch.clientY,
-        color:
-          fingers.find((f) => f.id === touch.identifier)?.color ||
-          getRandomColor(),
-      });
+  useEffect(() => {
+    if (fingers.size === 0) {
+      setChosenId(null);
+      const t = window.setTimeout(() => setBgColor(DEFAULT_BG), 300);
+      return () => window.clearTimeout(t);
     }
-    setFingers(moved);
-  };
+  }, [fingers.size]);
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const remaining: Finger[] = [];
-    for (let i = 0; i < e.touches.length; i++) {
-      const touch = e.touches[i];
-      remaining.push({
-        id: touch.identifier,
-        x: touch.clientX,
-        y: touch.clientY,
-        color:
-          fingers.find((f) => f.id === touch.identifier)?.color ||
-          getRandomColor(),
-      });
-    }
-    setFingers(remaining);
-  };
+  function ringStyle(f: Finger) {
+    const left = f.x - RING_SIZE / 2;
+    const top = f.y - RING_SIZE / 2;
+    return {
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${RING_SIZE}px`,
+      height: `${RING_SIZE}px`,
+      boxShadow: `0 0 28px 8px ${f.color}, inset 0 0 6px ${f.color}`,
+      border: `2px solid rgba(255,255,255,0.06)`,
+    } as React.CSSProperties;
+  }
 
   return (
-    <motion.div
-      className="w-full h-screen overflow-hidden relative flex items-center justify-center"
-      style={{ backgroundColor: bgColor }}
-      animate={{ backgroundColor: bgColor }}
-      transition={{ duration: 0.8 }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
+    <div
+      ref={containerRef}
+      className="w-screen h-screen fixed inset-0 overflow-hidden flex items-center justify-center select-none"
+      style={{
+        background: bgColor,
+        transition: "background 700ms ease",
+        touchAction: "none",
+        WebkitUserSelect: "none",
+        userSelect: "none",
+        WebkitTouchCallout: "none",
+      }}
+      onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Quotes */}
-      <AnimatePresence>
-        {quote && (
-          <motion.div
-            key={quote}
-            className="absolute text-white text-2xl font-bold text-center px-4"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.8 }}
-            transition={{ duration: 0.6 }}
-          >
-            {quote}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {fingers.size === 0 && (
+        <div className="text-center select-none px-6">
+          <h1 className="text-white text-2xl font-semibold mb-2">Touch of Fate by B!st</h1>
+          <p className="text-gray-300 max-w-md mx-auto">
+            Touch wisely… fate has a sense of humor.
+          </p>
+        </div>
+      )}
 
-      {/* Fingers */}
-      <AnimatePresence>
-        {fingers.map((finger) => (
-          <motion.div
-            key={finger.id}
-            className="absolute w-16 h-16 rounded-full border-4"
+      {Array.from(fingers.values()).map(f => (
+        <div
+          key={f.id}
+          className="pointer-events-none absolute rounded-full transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
+          style={ringStyle(f)}
+        >
+          <div
             style={{
-              left: finger.x - 32,
-              top: finger.y - 32,
-              borderColor: finger.color,
-              boxShadow: `0 0 15px ${finger.color}`,
+              width: 14,
+              height: 14,
+              background: "rgba(255,255,255,0.9)",
+              borderRadius: 999,
+              boxShadow: `0 2px 10px ${f.color}`,
             }}
-            animate={
-              chosenId === finger.id
-                ? {
-                    scale: [1, 1.2, 1],
-                    transition: { repeat: Infinity, duration: 1.2 },
-                  }
-                : { scale: 1 }
-            }
           />
-        ))}
-      </AnimatePresence>
-    </motion.div>
+
+          {chosenId === f.id && (
+            <div
+              aria-hidden
+              style={{
+                position: "absolute",
+                left: "50%",
+                top: "50%",
+                transform: "translate(-50%,-50%)",
+                width: RING_SIZE * 1.4,
+                height: RING_SIZE * 1.4,
+                borderRadius: 9999,
+                boxShadow: `0 0 18px 6px ${f.color}`,
+                animation: "finger-pulse 1200ms infinite",
+                opacity: 0.95,
+                pointerEvents: "none",
+              }}
+            />
+          )}
+        </div>
+      ))}
+
+      <style>{`
+        @keyframes finger-pulse {
+          0% { transform: translate(-50%,-50%) scale(0.9); opacity: 0.7; }
+          50% { transform: translate(-50%,-50%) scale(1.05); opacity: 1; }
+          100% { transform: translate(-50%,-50%) scale(0.9); opacity: 0.7; }
+        }
+      `}</style>
+    </div>
   );
 }
