@@ -1,3 +1,4 @@
+import { Pointer } from "lucide-react";
 import React, { useEffect, useRef, useState, type JSX } from "react";
 
 type Finger = {
@@ -129,8 +130,8 @@ export default function FingerPickerGame(): JSX.Element {
   }, [fingers.size]);
 
   function ringStyle(f: Finger) {
-    const left = f.x - RING_SIZE / 2;
-    const top = f.y - RING_SIZE / 2;
+    const left = f.x + RING_SIZE / 100;
+    const top = f.y + RING_SIZE / 100;
     return {
       left: `${left}px`,
       top: `${top}px`,
@@ -144,7 +145,7 @@ export default function FingerPickerGame(): JSX.Element {
   return (
     <div
       ref={containerRef}
-      className="w-screen h-screen fixed inset-0 overflow-hidden flex items-center justify-center select-none"
+      className="w-screen h-screen fixed inset-0 overflow-hidden flex items-center justify-center select-none px-4"
       style={{
         background: bgColor,
         transition: "background 700ms ease",
@@ -157,49 +158,49 @@ export default function FingerPickerGame(): JSX.Element {
     >
       {fingers.size === 0 && (
         <div className="text-center select-none px-6">
-          <h1 className="text-white text-2xl font-semibold mb-2">Touch of Fate by B!st</h1>
-          <p className="text-gray-300 max-w-md mx-auto">
-            Touch wisely… fate has a sense of humor.
-          </p>
+          <Pointer size={120} color="#e0e0e0" strokeWidth={0.75} />
+          <h1 className="text-white text-2xl font-semibold mt-2">Touch of Fate by B!st</h1>
         </div>
       )}
 
-      {Array.from(fingers.values()).map(f => (
-        <div
-          key={f.id}
-          className="pointer-events-none absolute rounded-full transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
-          style={ringStyle(f)}
-        >
+      {Array.from(fingers.values())
+        .filter(f => !chosenId || f.id === chosenId) // 👈 keep only chosen if exists
+        .map(f => (
           <div
-            style={{
-              width: 14,
-              height: 14,
-              background: "rgba(255,255,255,0.9)",
-              borderRadius: 999,
-              boxShadow: `0 2px 10px ${f.color}`,
-            }}
-          />
-
-          {chosenId === f.id && (
+            key={f.id}
+            className="pointer-events-none absolute rounded-full transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center"
+            style={ringStyle(f)}
+          >
             <div
-              aria-hidden
               style={{
-                position: "absolute",
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%,-50%)",
-                width: RING_SIZE * 1.4,
-                height: RING_SIZE * 1.4,
-                borderRadius: 9999,
-                boxShadow: `0 0 18px 6px ${f.color}`,
-                animation: "finger-pulse 1200ms infinite",
-                opacity: 0.95,
-                pointerEvents: "none",
+                width: 14,
+                height: 14,
+                background: "rgba(255,255,255,0.9)",
+                borderRadius: 999,
+                boxShadow: `0 2px 10px ${f.color}`,
               }}
             />
-          )}
-        </div>
-      ))}
+
+            {chosenId === f.id && (
+              <div
+                aria-hidden
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  top: "50%",
+                  transform: "translate(-50%,-50%)",
+                  width: RING_SIZE * 1.4,
+                  height: RING_SIZE * 1.4,
+                  borderRadius: 9999,
+                  boxShadow: `0 0 18px 6px ${f.color}`,
+                  animation: "finger-pulse 1200ms infinite",
+                  opacity: 0.95,
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+          </div>
+        ))}
 
       <style>{`
         @keyframes finger-pulse {
