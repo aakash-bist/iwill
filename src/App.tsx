@@ -48,8 +48,9 @@ export default function FingerPickerGame(): JSX.Element {
       if (keys.length === 0) return;
       const sel = keys[Math.floor(Math.random() * keys.length)];
       setChosenId(sel);
-      const f = fingers.get(sel);
-      if (f) setBgColor(f.color);
+      // To set the chosen finger's color as background
+      // const f = fingers.get(sel);
+      // if (f) setBgColor(f.color);
       timerRef.current = null;
     }, SELECTION_DELAY);
   }
