@@ -9,9 +9,9 @@ type Finger = {
   createdAt: number;
 };
 
-const DEFAULT_BG = "#0b1020";
+const DEFAULT_BG = "#0A0A0A";
 const RING_SIZE = 84; // px diameter
-const SELECTION_DELAY = 2500; // ms (2.5s)
+const SELECTION_DELAY = 4000; // ms (4s)
 
 function randomUniqueColor(existing: Set<string>) {
   for (let tries = 0; tries < 30; tries++) {
